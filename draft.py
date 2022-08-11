@@ -21,7 +21,7 @@ class Player:
         if cardIndex <= (len(self.pack) - 1):
             #Making sure they havent already picked
             if not self.hasPicked():
-                asyncio.create_task(self.user.send('You have picked ' + self.pack[cardIndex].name + '.'))
+                asyncio.create_task(self.user.send('You picked ' + self.pack[cardIndex].name + '.'))
                 self.pool.append(self.pack[cardIndex])
                 
                 temppickdata = []
@@ -78,7 +78,6 @@ class Timer:
                 if player.missedpicks == 3:
                     asyncio.create_task(player.user.send('Ran out of time. You have been kicked for missing 3 picks. Three strikes! you\'re out! https://tenor.com/view/strike-ponche-bateador-strike-out-swing-gif-15388719'))
                     self.draft.kick(player)
-                    
 
                 else:
                     asyncio.create_task(player.user.send('Ran out of time. You have automatically picked the first card in the pack. Please pay attention to avoid wasting time!'))
@@ -119,8 +118,9 @@ class Draft:
             player.pack = pack #Holds the packs
             i = i+15
             #splices reactions into pack
-            packWithReactions = [a + ': ' + b.name for a, b in zip(reactions, pack)] 
-            asyncio.create_task(send_pack_message("Here's your #" + str(self.currentPack) + " pack! React to select a card. Happy drafting!\n"+str(packWithReactions), player, pack))
+            #packWithReactions = [a + ': ' + b.name for a, b in zip(reactions, pack)]
+            asyncio.create_task(send_pack_message("Here's your #" + str(self.currentPack) + " pack! React to select a card. At any time, you can type !mypool to see the cards you've drafted. Note that you can't undo your pick. Happy drafting!", player, reactions, player.pack))
+            #asyncio.create_task(send_pack_message("Here's your #" + str(self.currentPack) + " pack! React to select a card. At any time, you can type !mypool to see the cards you've drafted. Happy drafting!", player, pack))
         
     def rotatePacks(self):
         self.currentPick += 1
@@ -132,8 +132,9 @@ class Draft:
             #Gives the player the next pack in the list. If that would be out of bounds give them the first pack.
             player.pack = packs[0] if (packs.index(player.pack) + 1) >= len(packs) else packs[packs.index(player.pack) + 1]
             #splices reactions into pack
-            packWithReactions = [a + ': ' + b.name for a, b in zip(reactions, player.pack)] 
-            asyncio.create_task(send_pack_message('Your next pack: \n\n'+str(packWithReactions), player, player.pack))
+            #packWithReactions = [a + ': ' + b.name for a, b in zip(reactions, player.pack)] 
+            asyncio.create_task(send_pack_message('Your next pack:', player, reactions, player.pack))
+            #asyncio.create_task(send_pack_message('Your next pack:', player, player.pack))
     
     #Decides if its time to rotate or send a new pack yet.
     def checkPacks(self):
@@ -143,7 +144,7 @@ class Draft:
                 self.rotatePacks()
             elif self.currentPack >= 4:
                 for player in self.players:
-                    asyncio.create_task(player.user.send('The draft is now finished. Use !ydk or !mypool to get started on deckbuilding. Your draft organizer should be posting a bracket soon.'))
+                    asyncio.create_task(player.user.send('The draft is now finished. Use !ydk or !mypool to get started on deckbuilding. Your draft organizer will announce the matchups soon. This bot was originally made by https://discord.gg/Nt7bEjw, with some changes made by ***. If you would like to draft more cubes like this in the future, check them out!'))
             else:
                 self.newPacks()
     
@@ -155,7 +156,6 @@ class Draft:
         #Drops the players pack into the void currently. 
         self.players.remove(player)
         self.checkPacks()
-        asyncio.create_task(self.channel.send("A player has been kicked from the draft"))
 
 def sortPack(pack):
     monsters = [card for card in pack if 'monster' in card.cardType.lower() and ('synchro' not in card.cardType.lower() and 'xyz' not in card.cardType.lower())]
@@ -169,5 +169,10 @@ async def add_reactions(message, emojis):
         asyncio.create_task(message.add_reaction(emoji))
 
 #This exists to allow making the pack messages async.
-async def send_pack_message(text, player, pack):
-    asyncio.create_task(add_reactions(await player.user.send(content=text, file=discord.File(fp=imagemanipulator.create_pack_image(pack),filename="image.jpg")), reactions[:len(pack)]))
+async def send_pack_message(text, player, reactions, pack):
+    await player.user.send(content=text, file=discord.File(fp=imagemanipulator.create_pack_image(pack),filename="image.jpg"))
+    desc = ""
+    for i in range(0, len(player.pack)):
+        desc += reactions[i] + ': [' + pack[i].name + '](https://db.ygoprodeck.com/card/?search=' +str(pack[i].id) + ') '
+    embedVar = discord.Embed(description=desc)
+    asyncio.create_task(add_reactions(await player.user.send(embed=embedVar), reactions[:len(pack)]))
