@@ -27,7 +27,7 @@ levels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 monsterTypes = ['Aqua', 'Beast', 'Beast-Warrior', 'Creator God', 'Cyberse', 'Dinosaur', 'Divine-Beast', 'Dragon', 'Fairy', 'Fiend', 'Fish', 'Insect',
 'Machine', 'Plant', 'Psychic', 'Pyro', 'Reptile', 'Rock', 'Sea Serpent', 'Spellcaster', 'Thunder', 'Warrior', 'Winged Beast', 'Wyrm', 'Zombie']
 #may be comprehensive?
-cardTypes = ['Normal Monster', 'Gemini Monster', 'Effect Monster', 'Tuner Monster', 'Spell', 'Trap', 'Synchro', 'XYZ']
+cardTypes = ['Normal Monster', 'Gemini Monster', 'Effect Monster', 'Tuner Monster', 'Spell', 'Trap', 'Synchro', 'XYZ', 'Link']
 
 drafts = {}
 cubes = {}
@@ -72,7 +72,7 @@ def createLevelDictionary(cardList):
     levelDict = {} 
     for level in levels:
         #add an entry to our dictonary with the level and count of cards of that level (not in extra)
-        levelDict[level] = len([card for card in cardList if card.level == level and 'synchro' not in card.cardType.lower() and 'xyz' not in card.cardType.lower()])
+        levelDict[level] = len([card for card in cardList if card.level == level and 'synchro' not in card.cardType.lower() and 'xyz' not in card.cardType.lower() and 'link' not in card.cardType.lower()])
     return {"**Level " + str(k) + "**": v for k, v in levelDict.items() if v != 0}
 
 def createTunerDictionary(cardList):
@@ -114,12 +114,15 @@ async def on_member_join(member):
     )
 
 @client.event
-async def on_reaction_add(reaction, user):
+async def on_raw_reaction_add(payload):
+    reaction = payload.emoji.name
+    user = await client.fetch_user(payload.user_id) #payload.user_id #client.get_user(payload.user_id) #payload.member
+
     global drafts
 
     #checks to make sure there are packs, this is a DM, and the player is in the draft
-    if not "DMChannel" in str(type(reaction.message.channel)):
-        return    
+    #if not "DMChannel" in str(type(reaction.message.channel)):
+        #return    
 
     for draft in drafts:
         for player in drafts[draft].players:
@@ -140,9 +143,6 @@ async def on_message(message):
     #Ignores the bots own messages.
     if message.author == client.user:
         return
-
-    if '!commands' in message.content.lower():
-        await message.channel.send("Commands for all users: \n !joindraft: Signs up for an open draft \n !leavedraft: De-registers the player \n !currentplayers: Lists the players currently registered for a draft \n !mypool: Lists the contents of the players draft pool \n !ydk: Exports the users card pool as a YDK file \n \n Commands that require the Host, Moderator, or Admin role: \n !!createdraft: Creates a draft that players can register for. Requires the name of the cube (eg list.cub) \n !!startdraft: Begins the draft - B3O will send packs to registered players \n ")
 
     if '!joindraft' in message.content.lower():
         #Makes sure there is both a draft in this channel, that draft hasnt started yet, and that the player isnt already in a draft.
@@ -174,43 +174,38 @@ async def on_message(message):
             await message.channel.send('There is no draft in this channel currently.')
 
     if ('!!createdraft') in message.content.lower():
-        if 'Admin' in str(message.author.roles) or 'Moderator' in str(message.author.roles) or 'Host' in str(message.author.roles): #Only admins, mods or draft hosts can do this command
-            for key in cubes.keys():
-                if len(message.content.lower().split()) > 1 and key == message.content.lower().split()[1]:
-                    drafts[message.channel] = Draft(cubes[key], message.channel)
-                    await message.channel.send('Draft created. Players can now join.')
-                    messagestring = message.content.lower()
-                    return
-            await message.channel.send('Cube not found, please enter one from this list next time:\n' + str(list(cubes.keys())))
+        for key in cubes.keys():
+            if len(message.content.lower().split()) > 1 and key == message.content.lower().split()[1]:
+                drafts[message.channel] = Draft(cubes[key], message.channel)
+                await message.channel.send('Draft created. Players can now join.')
+                messagestring = message.content.lower()
+                return
+        await message.channel.send('Cube not found, please enter one from this list next time:\n' + str(list(cubes.keys())))
             
     if ('!!startdraft') in message.content.lower():
-        if 'Admin' in str(message.author.roles) or 'Moderator' in str(message.author.roles)or 'Host' in str(message.author.roles): #Only admins, mods or draft hosts can do this command
-            #Confirms there is a unstarted draft in the channel.
-            if message.channel in drafts and drafts[message.channel].currentPack == 0:
-                await message.channel.send('The draft is starting! All players have received their first pack. Good luck!')
-                drafts[message.channel].startDraft()
-        else:
-            await message.channel.send('Only admins or moderators can start the draft')
+        #Confirms there is a unstarted draft in the channel.
+        if message.channel in drafts and drafts[message.channel].currentPack == 0:
+            await message.channel.send('The draft is starting! All players have received their first pack. Good luck!')
+            drafts[message.channel].startDraft()
 
     if ('!cubemetric' in message.content.lower()):
-        if 'Admin' in str(message.author.roles): #Only admins can do this command
-            for key in cubes.keys():
-                if len(message.content.lower().split()) > 1 and key == message.content.lower().split()[1]:
-                    CardList = cubes[key]
-                    if ('attr' in message.content.lower()): 
-                        asyncio.create_task(message.channel.send(createAttributeDictionary(CardList)))
-                    elif ('type' in message.content.lower()):
-                        asyncio.create_task(message.channel.send(createTypeDictionary(CardList)))
-                    elif ('level' in message.content.lower()):
-                        asyncio.create_task(message.channel.send(createLevelDictionary(CardList)))     
-                    elif ('tuner' in message.content.lower()):
-                        asyncio.create_task(message.channel.send(createTunerDictionary(CardList)))
-                    elif ('extra' in message.content.lower()):
-                        asyncio.create_task(message.channel.send(createExtraMessage(CardList)))
-                    else:
-                        asyncio.create_task(message.channel.send(createSpreadDictionary(CardList)))
-                    return
-            await message.channel.send('Cube not found, please enter one from this list next time:\n' + str(list(cubes.keys())))
+        for key in cubes.keys():
+            if len(message.content.lower().split()) > 1 and key == message.content.lower().split()[1]:
+                CardList = cubes[key]
+                if ('attr' in message.content.lower()): 
+                    asyncio.create_task(message.channel.send(createAttributeDictionary(CardList)))
+                elif ('type' in message.content.lower()):
+                    asyncio.create_task(message.channel.send(createTypeDictionary(CardList)))
+                elif ('level' in message.content.lower()):
+                    asyncio.create_task(message.channel.send(createLevelDictionary(CardList)))     
+                elif ('tuner' in message.content.lower()):
+                    asyncio.create_task(message.channel.send(createTunerDictionary(CardList)))
+                elif ('extra' in message.content.lower()):
+                    asyncio.create_task(message.channel.send(createExtraMessage(CardList)))
+                else:
+                    asyncio.create_task(message.channel.send(createSpreadDictionary(CardList)))
+                return
+        await message.channel.send('Cube not found, please enter one from this list next time:\n' + str(list(cubes.keys())))
 
 
     if ('!mypool' in message.content.lower()):
@@ -231,7 +226,7 @@ async def on_message(message):
                     elif ('list' in message.content.lower()):
                         await message.author.send(temppool)
                     else:
-                        monsters = [card for card in temppool if 'monster' in card.cardType.lower() and 'synchro' not in card.cardType.lower() and 'xyz' not in card.cardType.lower()]
+                        monsters = [card for card in temppool if 'monster' in card.cardType.lower() and 'synchro' not in card.cardType.lower() and 'xyz' not in card.cardType.lower() and 'link' not in card.cardType.lower()]
                         if(len(monsters) > 0):
                             #Async so they dont stall the other messages waiting for the response from the server
                             asyncio.create_task(message.channel.send("**Monsters (" + str(len(monsters)) + "):** " + str(monsters)))
@@ -241,13 +236,13 @@ async def on_message(message):
                         traps = [card for card in temppool if 'trap' in card.cardType.lower()]
                         if(len(traps) > 0):
                             asyncio.create_task(message.channel.send("**Traps (" + str(len(traps)) + "):** " + str(traps)))
-                        extra = [card for card in temppool if 'xyz' in card.cardType.lower() or 'synchro' in card.cardType.lower()]
+                        extra = [card for card in temppool if 'xyz' in card.cardType.lower() or 'synchro' in card.cardType.lower() or 'link' in card.cardType.lower()]
                         if(len(extra) > 0):
                             asyncio.create_task(message.channel.send("**Extra Deck (" + str(len(extra)) + "):** " + str(extra)))
 
     #Lists all cards in all pools and says who has each card. Could be useful for detecting cheating if necessary
     if ('!totalpool') in message.content.lower():
-        if 'Admin' in str(message.author.roles): #Only admins can do this command
+        if 'owner' in str(message.author.roles) or 'Admin' in str(message.author.roles): #Only admins can do this command
             pooltosend = ''
             for draft in drafts:
                 for player in drafts[draft].players:
@@ -260,7 +255,7 @@ async def on_message(message):
     
     #Removes people from the draft. Does not use @. For example, !remove fspluver, not !remove @fspluver
     if message.content.lower().strip().startswith('!remove'):
-        if ('Admin' in str(message.author.roles) or 'Moderator' in str(message.author.roles) or 'Host' in str(message.author.roles)) and message.channel in drafts: #Only admins, mods or draft hosts can do this command and makes sure there is a draft in this channel
+        if ('owner' in str(message.author.roles) or 'Admin' in str(message.author.roles) or 'Moderator' in str(message.author.roles) or 'Host' in str(message.author.roles)) and message.channel in drafts: #Only admins, mods or draft hosts can do this command and makes sure there is a draft in this channel
             for player in drafts[message.channel].players:
                 if player.user.name in message.content:
                     drafts[message.channel].kick(player)
@@ -288,12 +283,12 @@ async def on_message(message):
                     overflow_counter = 0
 
                     for card in player.pool:
-                        if (card.cardType != ("Synchro Monster") or ("Synchro Tuner Monster")) and (card.cardType != "XYZ Monster"):                
+                        if (card.cardType != ("Synchro Monster") or ("Synchro Tuner Monster")) and (card.cardType != "XYZ Monster") and (card.cardType != "Link Monster"):                
                             tempidpoolnoextra.append(card.id) #puts the ids of the main deck cards in a list
-                        if ('xyz' in card.cardType.lower() or 'synchro' in card.cardType.lower() and (overflow_counter < 14)):
+                        if ('xyz' in card.cardType.lower() or 'synchro' in card.cardType.lower() or 'link' in card.cardType.lower()) and (overflow_counter < 14):
                             tempidpoolextra.append(card.id) #puts the ids of the extra deck cards in a list
                             overflow_counter = overflow_counter + 1
-                        if ('xyz' in card.cardType.lower() or 'synchro' in card.cardType.lower()) and (overflow_counter > 13):
+                        if ('xyz' in card.cardType.lower() or 'synchro' in card.cardType.lower() or 'link' in card.cardType.lower()) and (overflow_counter > 13):
                             tempidpoolside.append(card.id) #puts the ids of the extra deck cards in an overflow side list
 
                     #This whole block formats their cards for the .ydk format
@@ -317,7 +312,7 @@ async def on_message(message):
                     asyncio.create_task(message.author.send(file=discord.File(fp=StringIO(ydkString),filename="YourDraftPool.ydk")))
 
     if ('!draftdone') in message.content.lower():
-        if 'Admin' in str(message.author.roles) or 'Moderator' in str(message.author.roles) or 'Host' in str(message.author.roles): #Only admins, mods or draft hosts can do this command
+        if 'owner' in str(message.author.roles) or 'Admin' in str(message.author.roles) or 'Moderator' in str(message.author.roles) or 'Host' in str(message.author.roles): #Only admins, mods or draft hosts can do this command
             await message.channel.send('The draft has concluded! Type "!mypool" to see your cardpool, and !ydk to get an export of your list. Good luck in your duels!')
 
     #TODO: Low priority. Fix this later.
